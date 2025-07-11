@@ -1,7 +1,7 @@
 import { Connection, Transaction, ConfirmOptions, Keypair, TransactionSignature} from "@solana/web3.js";
 
 // Based on a raw transaction, get the writable accounts
-function getWritableAccounts(transaction: Transaction) {
+export function getWritableAccounts(transaction: Transaction) {
   const msg = transaction.compileMessage();
   const accountKeys = msg.accountKeys;
 

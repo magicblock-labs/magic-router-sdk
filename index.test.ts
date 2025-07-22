@@ -10,14 +10,15 @@ jest.mock('@solana/web3.js', () => {
       sendRawTransaction: jest.fn().mockResolvedValue('mock-signature'),
     })),
     Transaction: jest.fn().mockImplementation(() => ({
-      compileMessage: jest.fn(() => ({
-        accountKeys: ['key1', 'key2'],
-        header: {
-          numRequiredSignatures: 1,
-          numReadonlySignedAccounts: 0,
-          numReadonlyUnsignedAccounts: 1,
-        },
-      })),
+      feePayer: 'mock-fee-payer',
+      instructions: [
+        {
+          keys: [
+            { pubkey: 'key1', isSigner: true, isWritable: true },
+            { pubkey: 'key2', isSigner: false, isWritable: false }
+          ]
+        }
+      ],
       serialize: jest.fn(() => Buffer.from('mock')),
       sign: jest.fn(),
     })),
@@ -58,8 +59,24 @@ describe('sendRouterTransaction', () => {
 
 describe('getWritableAccounts', () => {
   function makeTx(accountKeys: string[], header: any) {
+    // Convert the old test format to the new instruction-based format
+    const instructions = [{
+      keys: accountKeys.map((key, i) => {
+        const isSigner = i < header.numRequiredSignatures;
+        const isReadonly = isSigner
+          ? i >= header.numRequiredSignatures - header.numReadonlySignedAccounts
+          : i >= accountKeys.length - header.numReadonlyUnsignedAccounts;
+        return {
+          pubkey: key,
+          isSigner,
+          isWritable: !isReadonly
+        };
+      })
+    }];
+    
     return {
-      compileMessage: () => ({ accountKeys, header })
+      feePayer: accountKeys[0], // First account is typically the fee payer
+      instructions
     } as any;
   }
 

@@ -1,5 +1,11 @@
 import { prepareRouterTransaction, sendRouterTransaction, getWritableAccounts } from './index';
-import { Connection, Transaction, Keypair } from '@solana/web3.js';
+import { Connection, Transaction, Keypair, PublicKey } from '@solana/web3.js';
+
+// Mock PublicKey class
+const mockPublicKey = (address: string) => ({
+  toBase58: () => address,
+  toString: () => address,
+});
 
 jest.mock('@solana/web3.js', () => {
   const actual = jest.requireActual('@solana/web3.js');
@@ -10,12 +16,12 @@ jest.mock('@solana/web3.js', () => {
       sendRawTransaction: jest.fn().mockResolvedValue('mock-signature'),
     })),
     Transaction: jest.fn().mockImplementation(() => ({
-      feePayer: 'mock-fee-payer',
+      feePayer: mockPublicKey('mock-fee-payer'),
       instructions: [
         {
           keys: [
-            { pubkey: 'key1', isSigner: true, isWritable: true },
-            { pubkey: 'key2', isSigner: false, isWritable: false }
+            { pubkey: mockPublicKey('key1'), isSigner: true, isWritable: true },
+            { pubkey: mockPublicKey('key2'), isSigner: false, isWritable: false }
           ]
         }
       ],
@@ -23,8 +29,9 @@ jest.mock('@solana/web3.js', () => {
       sign: jest.fn(),
     })),
     Keypair: {
-      generate: jest.fn(() => ({ publicKey: 'mock-public-key' })),
+      generate: jest.fn(() => ({ publicKey: mockPublicKey('mock-public-key') })),
     },
+    PublicKey: jest.fn().mockImplementation((address) => mockPublicKey(address)),
   };
 });
 
@@ -48,10 +55,10 @@ describe('sendRouterTransaction', () => {
   it('sets recentBlockhash, feePayer, signs, and sends the transaction', async () => {
     const connection = new Connection('http://localhost');
     const transaction = new Transaction();
-    const wallet = { publicKey: 'mock-public-key', sign: jest.fn() } as any;
+    const wallet = { publicKey: mockPublicKey('mock-public-key'), sign: jest.fn() } as any;
     const signature = await sendRouterTransaction(connection, transaction, wallet);
     expect(transaction.recentBlockhash).toBe('mock-blockhash');
-    expect(transaction.feePayer).toBe('mock-public-key');
+    expect(transaction.feePayer?.toBase58()).toBe('mock-public-key');
     expect(signature).toBe('mock-signature');
     expect(global.fetch).toHaveBeenCalled();
   });
@@ -67,7 +74,7 @@ describe('getWritableAccounts', () => {
           ? i >= header.numRequiredSignatures - header.numReadonlySignedAccounts
           : i >= accountKeys.length - header.numReadonlyUnsignedAccounts;
         return {
-          pubkey: key,
+          pubkey: mockPublicKey(key),
           isSigner,
           isWritable: !isReadonly
         };
@@ -75,7 +82,7 @@ describe('getWritableAccounts', () => {
     }];
     
     return {
-      feePayer: accountKeys[0], // First account is typically the fee payer
+      feePayer: mockPublicKey(accountKeys[0]), // First account is typically the fee payer
       instructions
     } as any;
   }

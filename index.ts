@@ -29,7 +29,7 @@ export async function prepareRouterTransaction(connection: Connection, transacti
       jsonrpc: '2.0',
       id: 1,
       method: 'getBlockhashForAccounts',
-      params: [[writableAccounts]]
+      params: [writableAccounts]
     })
   });
   
@@ -39,7 +39,7 @@ export async function prepareRouterTransaction(connection: Connection, transacti
   return transaction;
 }
 
-export async function sendRouterTransaction(connection: Connection, transaction: Transaction, wallet: Keypair, options?: ConfirmOptions): Promise<TransactionSignature> {
+export async function sendRouterTransaction(connection: Connection, transaction: Transaction, signers: Keypair[], options?: ConfirmOptions): Promise<TransactionSignature> {
   const writableAccounts = getWritableAccounts(transaction);
   const blockHashResponse = await fetch(connection.rpcEndpoint, {
     method: 'POST',
@@ -48,14 +48,14 @@ export async function sendRouterTransaction(connection: Connection, transaction:
       jsonrpc: '2.0',
       id: 1,
       method: 'getBlockhashForAccounts',
-      params: [[writableAccounts]]
+      params: [writableAccounts]
     })
   });
   
   const blockHashData = await blockHashResponse.json();
   transaction.recentBlockhash = blockHashData.result.blockhash;
-  transaction.feePayer = wallet.publicKey;
-  transaction.sign(wallet);
+  transaction.feePayer = signers[0].publicKey;
+  transaction.sign(...signers);
 
   return await connection.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
 }

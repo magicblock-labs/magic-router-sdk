@@ -28,9 +28,10 @@ jest.mock('@solana/web3.js', () => {
       serialize: jest.fn(() => Buffer.from('mock')),
       sign: jest.fn(),
     })),
-    Keypair: {
-      generate: jest.fn(() => ({ publicKey: mockPublicKey('mock-public-key') })),
-    },
+    Keypair: jest.fn().mockImplementation(() => ({ 
+      publicKey: mockPublicKey('mock-public-key'),
+      sign: jest.fn()
+    })),
     PublicKey: jest.fn().mockImplementation((address) => mockPublicKey(address)),
   };
 });
@@ -47,7 +48,16 @@ describe('prepareRouterTransaction', () => {
     const transaction = new Transaction();
     const result = await prepareRouterTransaction(connection, transaction);
     expect(result.recentBlockhash).toBe('mock-blockhash');
-    expect(global.fetch).toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledWith('http://localhost', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'getBlockhashForAccounts',
+        params: [['mock-fee-payer', 'key1']]
+      })
+    });
   });
 });
 
@@ -55,74 +65,87 @@ describe('sendRouterTransaction', () => {
   it('sets recentBlockhash, feePayer, signs, and sends the transaction', async () => {
     const connection = new Connection('http://localhost');
     const transaction = new Transaction();
-    const wallet = { publicKey: mockPublicKey('mock-public-key'), sign: jest.fn() } as any;
-    const signature = await sendRouterTransaction(connection, transaction, wallet);
+    const signers = [new Keypair()];
+    const signature = await sendRouterTransaction(connection, transaction, signers);
+    
     expect(transaction.recentBlockhash).toBe('mock-blockhash');
     expect(transaction.feePayer?.toBase58()).toBe('mock-public-key');
+    expect(transaction.sign).toHaveBeenCalledWith(...signers);
     expect(signature).toBe('mock-signature');
-    expect(global.fetch).toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledWith('http://localhost', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'getBlockhashForAccounts',
+        params: [['mock-fee-payer', 'key1']]
+      })
+    });
   });
 });
 
 describe('getWritableAccounts', () => {
-  function makeTx(accountKeys: string[], header: any) {
-    // Convert the old test format to the new instruction-based format
-    const instructions = [{
-      keys: accountKeys.map((key, i) => {
-        const isSigner = i < header.numRequiredSignatures;
-        const isReadonly = isSigner
-          ? i >= header.numRequiredSignatures - header.numReadonlySignedAccounts
-          : i >= accountKeys.length - header.numReadonlyUnsignedAccounts;
-        return {
-          pubkey: mockPublicKey(key),
-          isSigner,
-          isWritable: !isReadonly
-        };
-      })
-    }];
-    
-    return {
-      feePayer: mockPublicKey(accountKeys[0]), // First account is typically the fee payer
-      instructions
+  it('returns writable accounts from transaction', () => {
+    const transaction = {
+      feePayer: mockPublicKey('fee-payer'),
+      instructions: [
+        {
+          keys: [
+            { pubkey: mockPublicKey('key1'), isWritable: true },
+            { pubkey: mockPublicKey('key2'), isWritable: false },
+            { pubkey: mockPublicKey('key3'), isWritable: true }
+          ]
+        }
+      ]
     } as any;
-  }
-
-  it('returns all accounts as writable if none are readonly', () => {
-    const tx = makeTx(['a', 'b', 'c'], {
-      numRequiredSignatures: 2,
-      numReadonlySignedAccounts: 0,
-      numReadonlyUnsignedAccounts: 0,
-    });
-    expect(getWritableAccounts(tx)).toEqual(['a', 'b', 'c']);
+    
+    const result = getWritableAccounts(transaction);
+    expect(result).toEqual(['fee-payer', 'key1', 'key3']);
   });
 
-  it('excludes readonly signed accounts', () => {
-    const tx = makeTx(['a', 'b', 'c'], {
-      numRequiredSignatures: 2,
-      numReadonlySignedAccounts: 1,
-      numReadonlyUnsignedAccounts: 0,
-    });
-    // Only the last signer is readonly
-    expect(getWritableAccounts(tx)).toEqual(['a', 'c']);
+  it('handles transaction without feePayer', () => {
+    const transaction = {
+      feePayer: null,
+      instructions: [
+        {
+          keys: [
+            { pubkey: mockPublicKey('key1'), isWritable: true },
+            { pubkey: mockPublicKey('key2'), isWritable: false }
+          ]
+        }
+      ]
+    } as any;
+    
+    const result = getWritableAccounts(transaction);
+    expect(result).toEqual(['key1']);
   });
 
-  it('excludes readonly unsigned accounts', () => {
-    const tx = makeTx(['a', 'b', 'c', 'd'], {
-      numRequiredSignatures: 2,
-      numReadonlySignedAccounts: 0,
-      numReadonlyUnsignedAccounts: 2,
-    });
-    // Last two unsigned are readonly
-    expect(getWritableAccounts(tx)).toEqual(['a', 'b']);
+  it('handles transaction without instructions', () => {
+    const transaction = {
+      feePayer: mockPublicKey('fee-payer'),
+      instructions: []
+    } as any;
+    
+    const result = getWritableAccounts(transaction);
+    expect(result).toEqual(['fee-payer']);
   });
 
-  it('handles mix of readonly signed and unsigned', () => {
-    const tx = makeTx(['a', 'b', 'c', 'd', 'e'], {
-      numRequiredSignatures: 3,
-      numReadonlySignedAccounts: 1,
-      numReadonlyUnsignedAccounts: 1,
-    });
-    // signers: a, b, c (c is readonly), unsigned: d, e (e is readonly)
-    expect(getWritableAccounts(tx)).toEqual(['a', 'b', 'd']);
+  it('deduplicates writable accounts', () => {
+    const transaction = {
+      feePayer: mockPublicKey('fee-payer'),
+      instructions: [
+        {
+          keys: [
+            { pubkey: mockPublicKey('key1'), isWritable: true },
+            { pubkey: mockPublicKey('key1'), isWritable: true }, // Duplicate
+            { pubkey: mockPublicKey('key2'), isWritable: false }
+          ]
+        }
+      ]
+    } as any;
+    
+    const result = getWritableAccounts(transaction);
+    expect(result).toEqual(['fee-payer', 'key1']);
   });
 }); 

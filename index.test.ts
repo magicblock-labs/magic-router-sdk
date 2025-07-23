@@ -1,4 +1,4 @@
-import { prepareRouterTransaction, sendRouterTransaction, getWritableAccounts, getClosestValidator } from './index';
+import { prepareMagicTransaction, sendMagicTransaction, getWritableAccounts, getClosestValidator } from './index';
 import { Connection, Transaction, Keypair, PublicKey } from '@solana/web3.js';
 
 // Mock PublicKey class
@@ -17,6 +17,7 @@ jest.mock('@solana/web3.js', () => {
     })),
     Transaction: jest.fn().mockImplementation(() => ({
       feePayer: mockPublicKey('mock-fee-payer'),
+      signature: [],
       instructions: [
         {
           keys: [
@@ -46,7 +47,7 @@ describe('prepareRouterTransaction', () => {
   it('sets recentBlockhash and returns the transaction', async () => {
     const connection = new Connection('http://localhost');
     const transaction = new Transaction();
-    const result = await prepareRouterTransaction(connection, transaction);
+    const result = await prepareMagicTransaction(connection, transaction);
     expect(result.recentBlockhash).toBe('mock-blockhash');
     expect(global.fetch).toHaveBeenCalledWith('http://localhost', {
       method: 'POST',
@@ -66,10 +67,10 @@ describe('sendRouterTransaction', () => {
     const connection = new Connection('http://localhost');
     const transaction = new Transaction();
     const signers = [new Keypair()];
-    const signature = await sendRouterTransaction(connection, transaction, signers);
+    const signature = await sendMagicTransaction(connection, transaction, signers);
     
     expect(transaction.recentBlockhash).toBe('mock-blockhash');
-    expect(transaction.feePayer?.toBase58()).toBe('mock-public-key');
+    expect(transaction.feePayer?.toBase58()).toBe('mock-fee-payer');
     expect(transaction.sign).toHaveBeenCalledWith(...signers);
     expect(signature).toBe('mock-signature');
     expect(global.fetch).toHaveBeenCalledWith('http://localhost', {

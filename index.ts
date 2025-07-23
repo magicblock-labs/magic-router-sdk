@@ -1,4 +1,4 @@
-import { Connection, Transaction, ConfirmOptions, Keypair, TransactionSignature, Signer, BlockhashWithExpiryBlockHeight, SendOptions, PublicKey} from "@solana/web3.js";
+import { Connection, Transaction, ConfirmOptions, TransactionSignature, Signer, BlockhashWithExpiryBlockHeight, SendOptions, PublicKey} from "@solana/web3.js";
 
 /**
  * Get all writable accounts from a transaction.
@@ -62,23 +62,7 @@ export async function getLatestBlockhashForMagicTransaction(connection: Connecti
   });
 
   const blockHashData = await blockHashResponse.json();
-  console.log('Blockhash Data:', blockHashData);
-
   return blockHashData.result;
-}
-
-
-/**
- * @deprecated Use `prepareMagicTransaction()` instead.
- * 
- * Prepare a transaction for sending by setting the recent blockhash.
- */
-export async function prepareRouterTransaction(connection: Connection, transaction: Transaction, options?: ConfirmOptions): Promise<Transaction> {
-
-  const blockHashData = await getLatestBlockhashForMagicTransaction(connection, transaction, options);
-  transaction.recentBlockhash = blockHashData.blockhash;
-
-  return transaction;
 }
 
 /**
@@ -91,23 +75,6 @@ export async function prepareMagicTransaction(connection: Connection, transactio
 
   return transaction;
 }
-
-
-/**
- * @deprecated Use `sendMagicTransaction()` instead.
- * 
- * Send a transaction to the Solana network via Magic Router.
- */
-export async function sendRouterTransaction(connection: Connection, transaction: Transaction, signers: Keypair[], options?: ConfirmOptions): Promise<TransactionSignature> {
-  
-  const blockHashData = await getLatestBlockhashForMagicTransaction(connection, transaction, options);
-  transaction.recentBlockhash = blockHashData.blockhash;
-  transaction.feePayer = signers[0].publicKey;
-  transaction.sign(...signers);
-
-  return await connection.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
-}
-
 
 /**
  * Send a transaction, returning the signature of the transaction.
@@ -136,12 +103,9 @@ export async function sendMagicTransaction (connection: Connection, transaction:
             if (!transaction.signature) {
                 throw new Error('!signature'); // should never happen
             }
-            const signature = transaction.signature.toString('base64');
             break;
         }
     }
     const wireTransaction = transaction.serialize();
     return await connection.sendRawTransaction(wireTransaction, signersOrOptions as SendOptions);
 }
-
-

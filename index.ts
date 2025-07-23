@@ -1,10 +1,8 @@
-<<<<<<< HEAD
-import { Connection, Transaction, ConfirmOptions, Keypair, TransactionSignature, Signer, BlockhashWithExpiryBlockHeight, SendOptions} from "@solana/web3.js";
-=======
-import { Connection, Transaction, ConfirmOptions, Keypair, TransactionSignature, PublicKey } from "@solana/web3.js";
->>>>>>> 9cd4a9648f337e0b6327f657d3e55f917129c603
+import { Connection, Transaction, ConfirmOptions, Keypair, TransactionSignature, Signer, BlockhashWithExpiryBlockHeight, SendOptions, PublicKey} from "@solana/web3.js";
 
-// Based on a raw transaction, get the writable accounts
+/**
+ * Get all writable accounts from a transaction.
+ */
 export function getWritableAccounts(transaction: Transaction) {
   const writableAccounts = new Set<string>();
 
@@ -24,6 +22,10 @@ export function getWritableAccounts(transaction: Transaction) {
   return Array.from(writableAccounts);
 }
 
+
+/**
+ * Get the closest validator's public key from the router connection.
+ */
 export async function getClosestValidator(routerConnection: Connection) {
   const response = await fetch(routerConnection.rpcEndpoint, {
     method: 'POST',
@@ -67,6 +69,8 @@ export async function getLatestBlockhashForMagicTransaction(connection: Connecti
 
 
 /**
+ * @deprecated Use `prepareMagicTransaction()` instead.
+ * 
  * Prepare a transaction for sending by setting the recent blockhash.
  */
 export async function prepareRouterTransaction(connection: Connection, transaction: Transaction, options?: ConfirmOptions): Promise<Transaction> {
@@ -76,6 +80,18 @@ export async function prepareRouterTransaction(connection: Connection, transacti
 
   return transaction;
 }
+
+/**
+ * Prepare a transaction for sending by setting the recent blockhash.
+ */
+export async function prepareMagicTransaction(connection: Connection, transaction: Transaction, options?: ConfirmOptions): Promise<Transaction> {
+
+  const blockHashData = await getLatestBlockhashForMagicTransaction(connection, transaction, options);
+  transaction.recentBlockhash = blockHashData.blockhash;
+
+  return transaction;
+}
+
 
 /**
  * @deprecated Use `sendMagicTransaction()` instead.
@@ -129,33 +145,3 @@ export async function sendMagicTransaction (connection: Connection, transaction:
 }
 
 
-/**
- * Get the latest blockhash for a transaction based on writable accounts.
- */
-export async function getClosestValidator(connection: Connection): Promise<any> {
-
-  const identityResponse = await fetch(connection.rpcEndpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'getIdentity',
-      params: []
-    })
-  });
-<<<<<<< HEAD
-  
-  const identityData = await identityResponse.json();
-  return identityData.result;
-}
-=======
-
-  const blockHashData = await blockHashResponse.json();
-  transaction.recentBlockhash = blockHashData.result.blockhash;
-  transaction.feePayer = signers[0].publicKey;
-  transaction.sign(...signers);
-
-  return await connection.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
-}
->>>>>>> 9cd4a9648f337e0b6327f657d3e55f917129c603

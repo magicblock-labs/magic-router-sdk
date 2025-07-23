@@ -2,22 +2,22 @@ import { Connection, Transaction, ConfirmOptions, Keypair, TransactionSignature}
 
 // Based on a raw transaction, get the writable accounts
 export function getWritableAccounts(transaction: Transaction) {
-  const writableAccounts = new Set();
-  
-  if (transaction.feePayer) {
-    writableAccounts.add(transaction.feePayer);
-  }
-  
-  // Check all instruction keys
-  for (const instruction of transaction.instructions) {
-    for (const key of instruction.keys) {
-      if (key.isWritable) {
-        writableAccounts.add(key.pubkey);
+  const writableAccounts = new Set<string>();
+
+      if (transaction.feePayer) {
+        writableAccounts.add(transaction.feePayer.toBase58());
       }
-    }
-  }
-  
-  return Array.from(writableAccounts);
+
+      // Check all instruction keys
+      for (const instruction of transaction.instructions) {
+        for (const key of instruction.keys) {
+          if (key.isWritable) {
+            writableAccounts.add(key.pubkey.toBase58());
+          }
+        }
+      }
+
+      return Array.from(writableAccounts);
 }
 
 export async function prepareRouterTransaction(connection: Connection, transaction: Transaction, options?: ConfirmOptions): Promise<Transaction> {

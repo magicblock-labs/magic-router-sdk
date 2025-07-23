@@ -1,4 +1,4 @@
-import { Connection, Transaction, ConfirmOptions, Keypair, TransactionSignature} from "@solana/web3.js";
+import { Connection, Transaction, ConfirmOptions, Keypair, TransactionSignature, Signer, BlockhashWithExpiryBlockHeight, SendOptions} from "@solana/web3.js";
 
 // Based on a raw transaction, get the writable accounts
 export function getWritableAccounts(transaction: Transaction) {
@@ -20,8 +20,12 @@ export function getWritableAccounts(transaction: Transaction) {
       return Array.from(writableAccounts);
 }
 
-export async function prepareRouterTransaction(connection: Connection, transaction: Transaction, options?: ConfirmOptions): Promise<Transaction> {
+/**
+ * Get the latest blockhash for a transaction based on writable accounts.
+ */
+export async function getLatestBlockhashForMagicTransaction(connection: Connection, transaction: Transaction, options?: ConfirmOptions): Promise<BlockhashWithExpiryBlockHeight> {
   const writableAccounts = getWritableAccounts(transaction);
+
   const blockHashResponse = await fetch(connection.rpcEndpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -34,28 +38,91 @@ export async function prepareRouterTransaction(connection: Connection, transacti
   });
   
   const blockHashData = await blockHashResponse.json();
-  transaction.recentBlockhash = blockHashData.result.blockhash;
+  console.log('Blockhash Data:', blockHashData);
+
+  return blockHashData.result;
+}
+
+
+/**
+ * Prepare a transaction for sending by setting the recent blockhash.
+ */
+export async function prepareRouterTransaction(connection: Connection, transaction: Transaction, options?: ConfirmOptions): Promise<Transaction> {
+
+  const blockHashData = await getLatestBlockhashForMagicTransaction(connection, transaction, options);
+  transaction.recentBlockhash = blockHashData.blockhash;
 
   return transaction;
 }
 
+/**
+ * @deprecated Use `sendMagicTransaction()` instead.
+ * 
+ * Send a transaction to the Solana network via Magic Router.
+ */
 export async function sendRouterTransaction(connection: Connection, transaction: Transaction, signers: Keypair[], options?: ConfirmOptions): Promise<TransactionSignature> {
-  const writableAccounts = getWritableAccounts(transaction);
-  const blockHashResponse = await fetch(connection.rpcEndpoint, {
+  
+  const blockHashData = await getLatestBlockhashForMagicTransaction(connection, transaction, options);
+  transaction.recentBlockhash = blockHashData.blockhash;
+  transaction.feePayer = signers[0].publicKey;
+  transaction.sign(...signers);
+
+  return await connection.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
+}
+
+
+/**
+ * Send a transaction, returning the signature of the transaction.
+ * This function is modified to handle the magic transaction sending strategy by getting the latest blockhash based on writable accounts.
+ */
+export async function sendMagicTransaction (connection: Connection, transaction: Transaction, signersOrOptions: Array<Signer> | SendOptions = { skipPreflight: true }) : Promise<TransactionSignature> {
+    if ('version' in transaction) {
+        if (signersOrOptions && Array.isArray(signersOrOptions)) {
+            throw new Error('Invalid arguments');
+        }
+        const wireTransaction = transaction.serialize();
+        return await connection.sendRawTransaction(wireTransaction, signersOrOptions as SendOptions);
+    }
+    if (signersOrOptions === undefined || !Array.isArray(signersOrOptions)) {
+        throw new Error('Invalid arguments');
+    }
+    const signers = signersOrOptions;
+    if (transaction.nonceInfo) {
+        transaction.sign(...signers);
+    } else {
+        for (;;) {
+            const latestBlockhash = await getLatestBlockhashForMagicTransaction(connection, transaction, signersOrOptions as SendOptions);
+            transaction.lastValidBlockHeight = latestBlockhash.lastValidBlockHeight;
+            transaction.recentBlockhash = latestBlockhash.blockhash;
+            transaction.sign(...signers);
+            if (!transaction.signature) {
+                throw new Error('!signature'); // should never happen
+            }
+            const signature = transaction.signature.toString('base64');
+            break;
+        }
+    }
+    const wireTransaction = transaction.serialize();
+    return await connection.sendRawTransaction(wireTransaction, signersOrOptions as SendOptions);
+}
+
+
+/**
+ * Get the latest blockhash for a transaction based on writable accounts.
+ */
+export async function getClosestValidator(connection: Connection): Promise<any> {
+
+  const identityResponse = await fetch(connection.rpcEndpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       jsonrpc: '2.0',
       id: 1,
-      method: 'getBlockhashForAccounts',
-      params: [writableAccounts]
+      method: 'getIdentity',
+      params: []
     })
   });
   
-  const blockHashData = await blockHashResponse.json();
-  transaction.recentBlockhash = blockHashData.result.blockhash;
-  transaction.feePayer = signers[0].publicKey;
-  transaction.sign(...signers);
-
-  return await connection.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
+  const identityData = await identityResponse.json();
+  return identityData.result;
 }

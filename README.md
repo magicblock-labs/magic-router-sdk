@@ -14,6 +14,10 @@ npm install magic-router-sdk
 
 A helper method to retrieve writable solana accounts from an Anchor Transaction object.
 
+#### `getClosestValidator(routerConnection: Connection): Promise<PublicKey>`
+
+Fetches the identity of the closest validator to the router connection. Makes a JSON-RPC call to the `getIdentity` method and returns the validator's public key.
+
 #### `prepareRouterTransaction(connection: Connection, transaction: Transaction, options?: ConfirmOptions): Promise<Transaction>`
 
 Constructs a Magic Router transaction. Fetches the correct blockhash for the writable accounts (either in an ephemeral rollup or base chain) in the 

@@ -1,23 +1,45 @@
+<<<<<<< HEAD
 import { Connection, Transaction, ConfirmOptions, Keypair, TransactionSignature, Signer, BlockhashWithExpiryBlockHeight, SendOptions} from "@solana/web3.js";
+=======
+import { Connection, Transaction, ConfirmOptions, Keypair, TransactionSignature, PublicKey } from "@solana/web3.js";
+>>>>>>> 9cd4a9648f337e0b6327f657d3e55f917129c603
 
 // Based on a raw transaction, get the writable accounts
 export function getWritableAccounts(transaction: Transaction) {
   const writableAccounts = new Set<string>();
 
-      if (transaction.feePayer) {
-        writableAccounts.add(transaction.feePayer.toBase58());
-      }
+  if (transaction.feePayer) {
+    writableAccounts.add(transaction.feePayer.toBase58());
+  }
 
-      // Check all instruction keys
-      for (const instruction of transaction.instructions) {
-        for (const key of instruction.keys) {
-          if (key.isWritable) {
-            writableAccounts.add(key.pubkey.toBase58());
-          }
-        }
+  // Check all instruction keys
+  for (const instruction of transaction.instructions) {
+    for (const key of instruction.keys) {
+      if (key.isWritable) {
+        writableAccounts.add(key.pubkey.toBase58());
       }
+    }
+  }
 
-      return Array.from(writableAccounts);
+  return Array.from(writableAccounts);
+}
+
+export async function getClosestValidator(routerConnection: Connection) {
+  const response = await fetch(routerConnection.rpcEndpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'getIdentity',
+      params: []
+    })
+  });
+
+  const identityData = await response.json();
+  const validatorKey = new PublicKey(identityData.result.identity);
+
+  return validatorKey;
 }
 
 /**
@@ -36,7 +58,7 @@ export async function getLatestBlockhashForMagicTransaction(connection: Connecti
       params: [writableAccounts]
     })
   });
-  
+
   const blockHashData = await blockHashResponse.json();
   console.log('Blockhash Data:', blockHashData);
 
@@ -122,7 +144,18 @@ export async function getClosestValidator(connection: Connection): Promise<any> 
       params: []
     })
   });
+<<<<<<< HEAD
   
   const identityData = await identityResponse.json();
   return identityData.result;
 }
+=======
+
+  const blockHashData = await blockHashResponse.json();
+  transaction.recentBlockhash = blockHashData.result.blockhash;
+  transaction.feePayer = signers[0].publicKey;
+  transaction.sign(...signers);
+
+  return await connection.sendRawTransaction(transaction.serialize(), { skipPreflight: true });
+}
+>>>>>>> 9cd4a9648f337e0b6327f657d3e55f917129c603

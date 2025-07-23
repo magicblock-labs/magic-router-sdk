@@ -1,4 +1,4 @@
-import { prepareRouterTransaction, sendRouterTransaction, getWritableAccounts } from './index';
+import { prepareRouterTransaction, sendRouterTransaction, getWritableAccounts, getClosestValidator } from './index';
 import { Connection, Transaction, Keypair, PublicKey } from '@solana/web3.js';
 
 // Mock PublicKey class
@@ -147,5 +147,57 @@ describe('getWritableAccounts', () => {
     
     const result = getWritableAccounts(transaction);
     expect(result).toEqual(['fee-payer', 'key1']);
+  });
+}); 
+
+describe('getClosestValidator', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('fetches and returns the closest validator public key', async () => {
+    const mockIdentityData = {
+      result: {
+        identity: 'mock-validator-identity'
+      }
+    };
+
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      json: () => Promise.resolve(mockIdentityData)
+    });
+
+    const connection = new Connection('http://localhost');
+    const result = await getClosestValidator(connection);
+
+    expect(global.fetch).toHaveBeenCalledWith('http://localhost', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'getIdentity',
+        params: []
+      })
+    });
+
+    expect(result.toBase58()).toBe('mock-validator-identity');
+  });
+
+  it('handles fetch errors gracefully', async () => {
+    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
+
+    const connection = new Connection('http://localhost');
+    
+    await expect(getClosestValidator(connection)).rejects.toThrow('Network error');
+  });
+
+  it('handles invalid response format', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      json: () => Promise.resolve({ error: 'Invalid response' })
+    });
+
+    const connection = new Connection('http://localhost');
+    
+    await expect(getClosestValidator(connection)).rejects.toThrow();
   });
 }); 

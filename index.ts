@@ -82,7 +82,7 @@ export async function prepareMagicTransaction(connection: Connection, transactio
  * Send a transaction, returning the signature of the transaction.
  * This function is modified to handle the magic transaction sending strategy by getting the latest blockhash based on writable accounts.
  */
-export async function sendMagicTransaction (connection: Connection, transaction: Transaction, signersOrOptions: Array<Signer> | SendOptions = { skipPreflight: true }) : Promise<TransactionSignature> {
+export async function sendMagicTransaction (connection: Connection, transaction: Transaction, signersOrOptions?: Array<Signer> | SendOptions, options?: SendOptions) : Promise<TransactionSignature> {
     if ('version' in transaction) {
         if (signersOrOptions && Array.isArray(signersOrOptions)) {
             throw new Error('Invalid arguments');

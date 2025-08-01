@@ -1,4 +1,4 @@
-import { Connection, Transaction, ConfirmOptions, TransactionSignature, Signer, BlockhashWithExpiryBlockHeight, SendOptions, PublicKey, TransactionConfirmationStrategy, RpcResponseAndContext, SignatureResult, Commitment, SendTransactionError, SignatureStatusConfig, SignatureStatus} from "@solana/web3.js";
+import { Connection, Transaction, ConfirmOptions, TransactionSignature, Signer, BlockhashWithExpiryBlockHeight, SendOptions, PublicKey, TransactionConfirmationStrategy, RpcResponseAndContext, SignatureResult, Commitment, SendTransactionError, SignatureStatusConfig, SignatureStatus, BaseTransactionConfirmationStrategy, GetAccountInfoConfig} from "@solana/web3.js";
 import assert from "assert";
 import bs58 from "bs58";
 
@@ -118,7 +118,7 @@ export async function sendMagicTransaction (connection: Connection, transaction:
  * This function is modified to handle the magic transaction confirmation strategy.
  * ONLY supports polling for now.
  */
-export async function confirmMagicTransaction(connection: Connection, strategy: TransactionConfirmationStrategy, commitment?: Commitment): Promise<RpcResponseAndContext<SignatureResult>> {
+export async function confirmMagicTransaction(connection: Connection, strategy: TransactionConfirmationStrategy | string, commitment?: Commitment): Promise<RpcResponseAndContext<SignatureResult>> {
     let rawSignature;
     if (typeof strategy == 'string') {
       rawSignature = strategy;
@@ -186,7 +186,7 @@ export async function sendAndConfirmMagicTransaction(connection: Connection, tra
             }, options && options.commitment)).value;
         } else {
         if (options?.abortSignal != null) {
-        console.warn('sendAndConfirmTransaction(): A transaction with a deprecated confirmation strategy was ' + 'supplied along with an `abortSignal`. Only transactions having `lastValidBlockHeight` ' + 'or a combination of `nonceInfo` and `minNonceContextSlot` are abortable.');
+          console.warn('sendAndConfirmTransaction(): A transaction with a deprecated confirmation strategy was ' + 'supplied along with an `abortSignal`. Only transactions having `lastValidBlockHeight` ' + 'or a combination of `nonceInfo` and `minNonceContextSlot` are abortable.');
         }
         status = (await confirmMagicTransaction(connection, signature, options && options.commitment)).value;
     }
@@ -214,7 +214,7 @@ async function getSignatureStatus(connection: Connection, signature: Transaction
     } = await getSignatureStatuses(connection, [signature], config);
     
     if (values.length === 0) {
-        const value = [null];
+        const value = null;
         return {
             context,
             value
@@ -235,10 +235,7 @@ async function getSignatureStatus(connection: Connection, signature: Transaction
  * Fetch the current statuses of a batch of signatures
  */
 async function getSignatureStatuses(connection: Connection, signatures: Array<TransactionSignature>, config?: SignatureStatusConfig) : Promise<RpcResponseAndContext<Array<SignatureStatus | null>>>{
-    const params = [signatures];
-    if (config) {
-        params.push(config);
-    }
+    const params = config ? [signatures, config] : [signatures];
     const unsafeRes = await fetch(connection.rpcEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -280,7 +277,7 @@ export async function pollSignatureStatus(
     commitment?: Commitment;
     abortSignal?: AbortSignal;
   } = {}
-): Promise<RpcResponseAndContext<SignatureResult> | null> {
+): Promise<RpcResponseAndContext<SignatureResult>> {
   const maxTries = Math.ceil(timeoutMs / intervalMs);
   let tries = 0;
 
@@ -301,11 +298,17 @@ export async function pollSignatureStatus(
               result.value.confirmationStatus === 'finalized'
             ) {
                 clearInterval(intervalId);
-                resolve(result);
+                resolve({
+                  context: result.context,
+                  value: result.value as SignatureResult
+                });
             }
         } else if (tries >= maxTries) {
           clearInterval(intervalId);
-          resolve(null); // or reject(new Error("Timeout"));
+          resolve({
+            context: result.context,
+            value: { err: new Error("Timeout") } as SignatureResult
+          });
         }
       } catch (err) {
         clearInterval(intervalId);
@@ -314,7 +317,7 @@ export async function pollSignatureStatus(
     }, intervalMs);
   });
 }
-function extractCommitmentFromConfig(commitmentOrConfig) {
+function extractCommitmentFromConfig(commitmentOrConfig: Commitment | GetAccountInfoConfig) {
   let commitment;
   let config;
   if (typeof commitmentOrConfig === 'string') {
@@ -335,7 +338,7 @@ function extractCommitmentFromConfig(commitmentOrConfig) {
 function buildArgs(args: Array<any>, override?: Commitment, encoding?: 'jsonParsed' | 'base64', extra?: any): Array<any> {
     const commitment = override;
     if (commitment || encoding || extra) {
-      let options = {};
+      let options: { [key: string]: any } = {};
       if (encoding) {
         options.encoding = encoding;
       }

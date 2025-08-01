@@ -118,7 +118,7 @@ export async function sendMagicTransaction (connection: Connection, transaction:
  * This function is modified to handle the magic transaction confirmation strategy.
  * ONLY supports polling for now.
  */
-export async function confirmMagicTransaction(connection: Connection, strategy : TransactionConfirmationStrategy, commitment?: Commitment) : Promise<RpcResponseAndContext<SignatureResult>> {
+export async function confirmMagicTransaction(connection: Connection, strategy: TransactionConfirmationStrategy, commitment?: Commitment): Promise<RpcResponseAndContext<SignatureResult>> {
     let rawSignature;
     if (typeof strategy == 'string') {
       rawSignature = strategy;
@@ -154,7 +154,9 @@ export async function confirmMagicTransaction(connection: Connection, strategy :
  * Send and confirm a transaction, returning the signature of the transaction.
  * ONLY supports polling for now.
  */
-export async function sendAndConfirmMagicTransaction(connection: Connection, transaction: Transaction, signers: Array<Signer>, options: ConfirmOptions): Promise<TransactionSignature> {
+export async function sendAndConfirmMagicTransaction(connection: Connection, transaction: Transaction, signers: Array<Signer>, options?: ConfirmOptions & Readonly<{
+    abortSignal?: AbortSignal;
+}>): Promise<TransactionSignature> {
     const sendOptions = options && {
         skipPreflight: options.skipPreflight,
         preflightCommitment: options.preflightCommitment || options.commitment,
@@ -330,7 +332,7 @@ function extractCommitmentFromConfig(commitmentOrConfig) {
     config
   }
 }
-function buildArgs(args, override, encoding, extra) {
+function buildArgs(args: Array<any>, override?: Commitment, encoding?: 'jsonParsed' | 'base64', extra?: any): Array<any> {
     const commitment = override;
     if (commitment || encoding || extra) {
       let options = {};
@@ -374,7 +376,7 @@ export async function GetCommitmentSignature(transactionSignature: TransactionSi
     }
     return commitSignature;
 }
-function parseScheduleCommitsLogsMessage(logMessages) {
+function parseScheduleCommitsLogsMessage(logMessages : Array<string>) {
     for (const message of logMessages) {
         const signaturePrefix = "ScheduledCommitSent signature: ";
         if (message.includes(signaturePrefix)) {
@@ -383,7 +385,7 @@ function parseScheduleCommitsLogsMessage(logMessages) {
     }
     return null;
 }
-function parseCommitsLogsMessage(logMessages) {
+function parseCommitsLogsMessage(logMessages : Array<string>) {
     for (const message of logMessages) {
         const signaturePrefix = "ScheduledCommitSent signature[0]: ";
         if (message.includes(signaturePrefix)) {

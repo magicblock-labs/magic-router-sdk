@@ -47,6 +47,27 @@ export async function getClosestValidator(routerConnection: Connection) {
 }
 
 /**
+ * Get delegation status for a given account from the router.
+ */
+export async function getDelegationStatus(connection: Connection, account: PublicKey | string): Promise<{ isDelegated: boolean }> {
+  const accountAddress = typeof account === 'string' ? account : account.toBase58();
+
+  const response = await fetch(`${connection.rpcEndpoint}/getDelegationStatus`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'getDelegationStatus',
+      params: [accountAddress]
+    })
+  });
+
+  const data = await response.json();
+  return data.result as { isDelegated: boolean };
+}
+
+/**
  * Get the latest blockhash for a transaction based on writable accounts.
  */
 export async function getLatestBlockhashForMagicTransaction(connection: Connection, transaction: Transaction, options?: ConfirmOptions): Promise<BlockhashWithExpiryBlockHeight> {
@@ -77,6 +98,8 @@ export async function prepareMagicTransaction(connection: Connection, transactio
 
   return transaction;
 }
+
+
 
 /**
  * Send a transaction, returning the signature of the transaction.

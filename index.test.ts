@@ -1,4 +1,4 @@
-import { prepareMagicTransaction, sendMagicTransaction, getWritableAccounts, getClosestValidator } from './index';
+import { prepareMagicTransaction, sendMagicTransaction, getWritableAccounts, getClosestValidator, getDelegationStatus } from './index';
 import { Connection, Transaction, Keypair, PublicKey } from '@solana/web3.js';
 
 // Mock PublicKey class
@@ -200,5 +200,59 @@ describe('getClosestValidator', () => {
     const connection = new Connection('http://localhost');
     
     await expect(getClosestValidator(connection)).rejects.toThrow();
+  });
+}); 
+
+describe('getDelegationStatus', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns delegation status for a string account', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      json: () => Promise.resolve({ result: { isDelegated: false } })
+    });
+
+    const connection = new Connection('http://localhost');
+    const account = '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU';
+
+    const result = await getDelegationStatus(connection, account);
+
+    expect(global.fetch).toHaveBeenCalledWith('http://localhost/getDelegationStatus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'getDelegationStatus',
+        params: [account]
+      })
+    });
+
+    expect(result).toEqual({ isDelegated: false });
+  });
+
+  it('returns delegation status for a PublicKey account', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      json: () => Promise.resolve({ result: { isDelegated: true } })
+    });
+
+    const connection = new Connection('http://localhost');
+    const accountKey = new PublicKey('mock-public-key');
+
+    const result = await getDelegationStatus(connection, accountKey);
+
+    expect(global.fetch).toHaveBeenCalledWith('http://localhost/getDelegationStatus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'getDelegationStatus',
+        params: [accountKey.toBase58()]
+      })
+    });
+
+    expect(result).toEqual({ isDelegated: true });
   });
 }); 

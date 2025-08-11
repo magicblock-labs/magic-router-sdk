@@ -18,6 +18,10 @@ A helper method to retrieve writable solana accounts from an Anchor Transaction 
 
 Fetches the identity of the closest validator to the router connection. Makes a JSON-RPC call to the `getIdentity` method and returns the validator's public key.
 
+#### `getDelegationStatus(connection: Connection, account: PublicKey | string): Promise<{ isDelegated: boolean }>`
+
+Checks whether the provided account is delegated in the Magic Router. Calls `POST <connection.rpcEndpoint>/getDelegationStatus` with JSON-RPC method `getDelegationStatus` and returns `{ isDelegated }`.
+
 #### `prepareMagicTransaction(connection: Connection, transaction: Transaction, options?: ConfirmOptions): Promise<Transaction>`
 
 Constructs a Magic Router transaction. Fetches the correct blockhash for the writable accounts (either in an ephemeral rollup or base chain) in the 
